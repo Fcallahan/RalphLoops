@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Ralph loop git shim — rejects destructive verbs, passes everything else through.
+set -e
+
+# Find the real git, skipping ourselves.
+real_git=""
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+IFS=':' read -ra path_parts <<< "$PATH"
+for dir in "${path_parts[@]}"; do
+  candidate="$dir/git"
+  if [[ -x "$candidate" ]]; then
+    if [[ "$(readlink -f "$candidate" 2>/dev/null || echo "$candidate")" != "$self" ]]; then
+      real_git="$candidate"
+      break
+    fi
+  fi
+done
+
+if [[ -z "$real_git" ]]; then
+  echo "ralph-loop git shim: could not find real git on PATH" >&2
+  exit 127
+fi
+
+# Inspect the first non-flag argument as the verb.
+verb=""
+for arg in "$@"; do
+  case "$arg" in
+    -*) ;;
+    *) verb="$arg"; break ;;
+  esac
+done
+
+case "$verb" in
+  commit|push|reset|rebase|tag|clean)
+    echo "ralph-loop: blocked destructive git verb: git $verb (Ralph loop forbids commits/pushes/history rewrites)" >&2
+    exit 1
+    ;;
+  checkout)
+    # Block file-discarding checkouts (`git checkout -- file` or `git checkout file`)
+    # but allow branch switching. Heuristic: if `--` appears, it's a discard.
+    for a in "$@"; do
+      if [[ "$a" == "--" ]]; then
+        echo "ralph-loop: blocked: git checkout -- ... (would discard worktree changes)" >&2
+        exit 1
+      fi
+    done
+    exec "$real_git" "$@"
+    ;;
+  branch)
+    # Block `git branch -D <name>` (force delete).
+    for a in "$@"; do
+      if [[ "$a" == "-D" ]]; then
+        echo "ralph-loop: blocked: git branch -D (force branch delete)" >&2
+        exit 1
+      fi
+    done
+    exec "$real_git" "$@"
+    ;;
+  *)
+    exec "$real_git" "$@"
+    ;;
+esac

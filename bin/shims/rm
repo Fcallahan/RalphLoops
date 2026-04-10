@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Ralph loop rm shim — blocks recursive/force deletes, allows targeted single-file deletes.
+set -e
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+real_rm=""
+IFS=':' read -ra path_parts <<< "$PATH"
+for dir in "${path_parts[@]}"; do
+  candidate="$dir/rm"
+  if [[ -x "$candidate" ]]; then
+    if [[ "$(readlink -f "$candidate" 2>/dev/null || echo "$candidate")" != "$self" ]]; then
+      real_rm="$candidate"
+      break
+    fi
+  fi
+done
+
+if [[ -z "$real_rm" ]]; then
+  echo "ralph-loop rm shim: could not find real rm on PATH" >&2
+  exit 127
+fi
+
+for a in "$@"; do
+  case "$a" in
+    -r|-R|-rf|-fr|-rfv|-vrf|--recursive|-f|--force)
+      echo "ralph-loop: blocked: rm with $a (Ralph loop forbids recursive/force deletes)" >&2
+      exit 1
+      ;;
+    -r*|-R*)
+      echo "ralph-loop: blocked: rm with $a (recursive)" >&2
+      exit 1
+      ;;
+  esac
+done
+
+exec "$real_rm" "$@"

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Ralph loop sudo shim — always refuses.
+echo "ralph-loop: blocked: sudo (Ralph loop forbids privilege escalation)" >&2
+exit 1
