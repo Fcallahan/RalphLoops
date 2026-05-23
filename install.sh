@@ -10,7 +10,11 @@ END_MARKER="# <<< ralphloops <<<"
 
 chmod +x \
   "$RALPH_LOOPS_DIR/bin/ralph-loop-claude.sh" \
+  "$RALPH_LOOPS_DIR/bin/ralph-loop-sonnet.sh" \
+  "$RALPH_LOOPS_DIR/bin/ralph-loop-opus.sh" \
   "$RALPH_LOOPS_DIR/bin/ralph-loop-codex.sh" \
+  "$RALPH_LOOPS_DIR/bin/ralph-loop-pi.sh" \
+  "$RALPH_LOOPS_DIR/bin/ralph-loop-smart.sh" \
   "$RALPH_LOOPS_DIR/bin/shims/git" \
   "$RALPH_LOOPS_DIR/bin/shims/rm" \
   "$RALPH_LOOPS_DIR/bin/shims/sudo" \
@@ -35,4 +39,8 @@ fi
 echo
 echo "Done. Open a new shell (or run: source $RALPH_LOOPS_DIR/shell-init.sh) to use:"
 echo "  ralph-loop-claude <pre-prompt> <iterations> \"<request>\""
+echo "  ralph-loop-sonnet <pre-prompt> <iterations> \"<request>\""
+echo "  ralph-loop-opus   <pre-prompt> <iterations> \"<request>\""
 echo "  ralph-loop-codex  <pre-prompt> <iterations> \"<request>\""
+echo "  ralph-loop-pi     <pre-prompt> <iterations> \"<request>\""
+echo "  ralph-loop-smart  <pre-prompt> <iterations> \"<request>\""

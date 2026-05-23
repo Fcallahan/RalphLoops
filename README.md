@@ -1,68 +1,344 @@
 # Ralphloops
 
-Shell wrappers that run `claude` or `codex` in a **Ralph loop**: from any worktree, you give the agent a pre-prompt, an iteration count, and a task description, and it autonomously plans → implements → re-evaluates N times. Each iteration starts with a fresh context and re-discovers what's done by reading the current worktree state.
+Modern shell harnesses for running coding agents in repeatable **Ralph loops**.
+
+A Ralph loop is a simple pattern:
+
+```text
+fresh agent session → audit current worktree → close one high-value gap → verify → hand off
+```
+
+Each iteration starts with fresh context and re-discovers the current repository state. That makes the loop resilient: if a previous iteration already finished part of the task, the next iteration should notice instead of redoing it.
+
+## What is included
+
+| Command | Backend | Best for |
+| --- | --- | --- |
+| `ralph-loop-claude` | Claude Code | General autonomous plan/implement loops. Defaults to Sonnet/high. |
+| `ralph-loop-sonnet` | Claude Code | Explicit Sonnet/high loop. |
+| `ralph-loop-opus` | Claude Code | Explicit Opus/medium loop. |
+| `ralph-loop-codex` | Codex CLI | OpenAI/Codex single-agent loops. |
+| `ralph-loop-pi` | Pi coding agent | Pi-based loops using your Pi defaults or env overrides. |
+| `ralph-loop-smart` | Claude + Pi + Codex | Multi-model harness: heavy planning, prompt orchestration, low-cost implementation, review, optional fix pass. |
 
 ## Install
 
 ```bash
-bash ~/code/Work/Ralphloops/install.sh
+bash /path/to/RalphLoops/install.sh
 exec zsh   # or open a new shell
 ```
 
-This appends a single `source` line to `~/.zshrc` (inside `# >>> ralphloops >>>` markers) and makes the scripts executable.
+The installer:
 
-## Use
+- makes scripts executable
+- appends one managed source block to `~/.zshrc`
+- exposes all `ralph-loop-*` functions and short aliases
+
+If you cloned this repo at `~/projects/RalphLoops`, run:
 
 ```bash
-# from any worktree
-ralph-loop-claude plan-implement 3 "build me a feature that does X"
-ralph-loop-codex  plan-implement 3 "build me a feature that does X"
+bash ~/projects/RalphLoops/install.sh
 ```
 
-Arguments:
+## Quick start
 
-1. **pre-prompt** — either a path to a `.md` file, or the bare name of one in `prompts/` (e.g. `plan-implement`).
-2. **iterations** — positive integer. Each iteration is a brand-new agent session.
-3. **request** — everything after iterations, joined as the task description.
+From any git worktree:
 
-Logs land in `./.ralph-loop/<timestamp>-iter-N.log` in the worktree you ran the command from. Add `.ralph-loop/` to that worktree's `.gitignore`.
+```bash
+ralph-loop-smart plan-implement 2 "add the missing tests for the auth flow"
+```
 
-For `ralph-loop-claude`, the terminal now shows a live rendered event stream so long-running iterations do not look stuck. The saved Claude log is the raw event stream (JSON lines), which is useful for debugging retries, tool calls, and failures after the fact.
+Or use a single backend:
 
-## What the agent can and can't do
+```bash
+ralph-loop-claude plan-implement 3 "build feature X"
+ralph-loop-codex  plan-implement 2 "fix bug Y"
+ralph-loop-pi     plan-implement 1 "audit and document Z"
+```
 
-**Allowed (no permission prompts):**
-- Read files, list directories, grep, cat, git status / log / diff
-- Edit files in the current worktree
-- Run builds, run tests, run any non-destructive shell command
+Arguments are the same for every wrapper:
 
-**Blocked (enforced two ways: Claude's `--disallowedTools` deny list, and a PATH shim for both backends):**
-- `git commit`, `git push`, `git reset`, `git rebase`, `git tag`, `git clean`, `git branch -D`, `git checkout -- ...`
+1. **pre-prompt** — either a path to a markdown file, or a bare prompt name from `prompts/` without `.md`.
+2. **iterations** — positive integer.
+3. **request** — everything after `iterations`, joined as the task description.
+
+Examples:
+
+```bash
+ralph-loop-sonnet plan-implement 3 "make the dashboard mobile-friendly"
+ralph-loop-opus ./my-custom-prompt.md 1 "review the architecture and make the smallest safe improvement"
+ralph-loop-smart plan-implement 4 "implement search, tests, and docs"
+```
+
+## Smart Ralph loop
+
+`ralph-loop-smart` is the multi-model harness for bigger tasks.
+
+Default pipeline:
+
+```text
+1. Claude Opus / high      planner      read-only
+2. Pi GPT-5.5 / medium     orchestrator read-only prompt synthesis
+3. Codex GPT-5 / low       worker       sole writer
+4. Claude Opus / medium    reviewer     read-only
+5. Codex GPT-5 / low       fix worker   sole writer, only if review finds fixes
+```
+
+Why this shape:
+
+- **Opus plans** when deep reasoning matters.
+- **Pi orchestrates** the plan into a compact worker contract.
+- **Codex/GPT-5 low writes** to keep implementation cheaper and focused.
+- **Opus reviews** the actual diff before the next iteration.
+- **Shell owns orchestration**, so each phase passes files instead of relying on hidden chat history.
+
+Run it:
+
+```bash
+ralph-loop-smart plan-implement 2 "refactor the classes page and keep the build green"
+```
+
+Artifacts are written under:
+
+```text
+./.ralph-loop/smart-YYYYmmdd-HHMMSS/iter-N/
+├── plan.md
+├── planner.log
+├── worker-prompt.md
+├── orchestrator.log
+├── worker.log
+├── worker-summary.md
+├── review.md
+├── reviewer.log
+├── fix.log
+└── fix-summary.md
+```
+
+Add this to each target project’s `.gitignore`:
+
+```gitignore
+.ralph-loop/
+```
+
+### Smart loop environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RALPH_SMART_PLAN_MODEL` | `opus` | Claude planner model. |
+| `RALPH_SMART_PLAN_EFFORT` | `high` | Claude planner effort. |
+| `RALPH_SMART_ORCH_MODEL` | `openai/gpt-5.5` | Pi orchestrator model. |
+| `RALPH_SMART_ORCH_THINKING` | `medium` | Pi orchestrator thinking level. |
+| `RALPH_SMART_WORKER_MODEL` | `gpt-5` | Codex worker model. |
+| `RALPH_SMART_WORKER_EFFORT` | `low` | Codex worker reasoning effort. |
+| `RALPH_SMART_REVIEW_MODEL` | `opus` | Claude reviewer model. |
+| `RALPH_SMART_REVIEW_EFFORT` | `medium` | Claude reviewer effort. |
+| `RALPH_SMART_SKIP_REVIEW` | `0` | Set to `1` to skip review and fix phases. |
+| `RALPH_SMART_SKIP_FIX` | `0` | Set to `1` to review only and skip automatic fixes. |
+
+Examples:
+
+```bash
+# Cheaper review-only run
+RALPH_SMART_REVIEW_MODEL=sonnet \
+RALPH_SMART_SKIP_FIX=1 \
+ralph-loop-smart plan-implement 1 "inspect and improve the CLI help text"
+
+# Use Pi defaults for orchestration
+RALPH_SMART_ORCH_MODEL= \
+ralph-loop-smart plan-implement 2 "build a small feature"
+```
+
+## Single-backend wrappers
+
+### Claude wrappers
+
+`ralph-loop-claude` defaults to:
+
+```text
+model: sonnet
+effort: high
+permission mode: bypassPermissions
+```
+
+Use model-specific wrappers:
+
+```bash
+ralph-loop-sonnet plan-implement 2 "..."
+ralph-loop-opus   plan-implement 1 "..."
+```
+
+Override Claude defaults:
+
+```bash
+RALPH_CLAUDE_MODEL=opus \
+RALPH_CLAUDE_EFFORT=high \
+RALPH_CLAUDE_PERMISSION_MODE=acceptEdits \
+ralph-loop-claude plan-implement 1 "..."
+```
+
+`ralph-loop-claude` renders Claude’s stream in the terminal and saves the raw event stream to `.ralph-loop/`.
+
+### Codex wrapper
+
+```bash
+ralph-loop-codex plan-implement 2 "..."
+```
+
+Codex runs with workspace-write sandboxing and non-interactive approval policy. Destructive shell commands are blocked by PATH shims.
+
+### Pi wrapper
+
+```bash
+ralph-loop-pi plan-implement 2 "..."
+```
+
+By default, Pi uses your configured Pi defaults. Override per run:
+
+```bash
+RALPH_PI_MODEL=openai/gpt-5.5 \
+RALPH_PI_THINKING=medium \
+ralph-loop-pi plan-implement 1 "..."
+```
+
+## Safety model
+
+RalphLoops is intentionally conservative, but it is still an autonomous coding harness. Run it only in worktrees you are comfortable letting agents edit.
+
+Allowed:
+
+- read files and list directories
+- grep/search code
+- inspect git status/log/diff
+- edit files in the current worktree
+- run builds and tests
+- run non-destructive shell commands
+
+Blocked by prompts and shell/tool backstops where available:
+
+- `git commit`
+- `git push`
+- `git reset`
+- `git rebase`
+- `git tag`
+- `git clean`
+- destructive checkout patterns
 - `rm -r`, `rm -rf`, `rm -f`
 - `sudo`
 
-The pre-prompt also tells the agent never to attempt these, so the deny layer is a backstop, not the primary control.
+Important notes:
+
+- The harness does **not** commit or push for you.
+- Review generated diffs before committing.
+- Do not put secrets in prompts.
+- Do not commit `.ralph-loop/` logs; they can contain task text, file snippets, or model output.
+- Use a dedicated branch/worktree for risky tasks.
 
 ## Pre-prompts
 
-Drop new ones in `prompts/`. The filename (without `.md`) becomes the name you pass on the command line. The shipping prompt is `plan-implement.md`; read it for the format.
+Pre-prompts live in `prompts/`.
 
-The key idea every Ralph-loop pre-prompt should encode: **"some of this work may already be done; audit the current state before doing anything; close the single highest-value gap; end with an Iteration summary block."**
+The built-in prompt is:
 
-## Layout
-
+```text
+prompts/plan-implement.md
 ```
-Ralphloops/
+
+The core contract every prompt should preserve:
+
+1. The worktree may already contain partial work.
+2. Audit before editing.
+3. Identify what is done, partial, missing, or broken.
+4. Close the single highest-value remaining gap.
+5. Verify with build/tests where practical.
+6. End with an `## Iteration summary` handoff.
+
+Create your own prompt:
+
+```bash
+cp prompts/plan-implement.md prompts/my-loop.md
+ralph-loop-smart my-loop 2 "do something specific"
+```
+
+## Aliases
+
+After install:
+
+| Alias | Command |
+| --- | --- |
+| `rlc` | `ralph-loop-claude` |
+| `rls` | `ralph-loop-sonnet` |
+| `rlo` | `ralph-loop-opus` |
+| `rld` | `ralph-loop-codex` |
+| `rlp` | `ralph-loop-pi` |
+| `rlx` | `ralph-loop-smart` |
+
+## Troubleshooting
+
+### Command not found
+
+Open a new shell or run:
+
+```bash
+source /path/to/RalphLoops/shell-init.sh
+```
+
+### The loop stalls on permissions
+
+Use the default Claude permission mode, or explicitly set:
+
+```bash
+RALPH_CLAUDE_PERMISSION_MODE=bypassPermissions
+```
+
+For Smart loops, Claude phases are read-only by tool deny lists, and Codex phases run non-interactively with workspace-write sandboxing.
+
+### A model name is wrong for your setup
+
+Override it with env vars. For example:
+
+```bash
+RALPH_SMART_ORCH_MODEL=gpt-5.5 \
+RALPH_SMART_WORKER_MODEL=gpt-5-low \
+ralph-loop-smart plan-implement 1 "..."
+```
+
+### Logs are noisy
+
+That is expected. The latest summary files are usually the most useful:
+
+```bash
+find .ralph-loop -name '*summary.md' -o -name 'review.md' -o -name 'plan.md'
+```
+
+## Repository layout
+
+```text
+RalphLoops/
 ├── README.md
-├── install.sh                  # appends source line to ~/.zshrc
-├── shell-init.sh               # defines the shell functions
+├── install.sh
+├── shell-init.sh
 ├── bin/
 │   ├── ralph-loop-claude.sh
+│   ├── ralph-loop-sonnet.sh
+│   ├── ralph-loop-opus.sh
 │   ├── ralph-loop-codex.sh
-│   └── shims/                  # git/rm/sudo wrappers that block destructive verbs
+│   ├── ralph-loop-pi.sh
+│   ├── ralph-loop-smart.sh
+│   └── shims/
 │       ├── git
 │       ├── rm
 │       └── sudo
 └── prompts/
     └── plan-implement.md
 ```
+
+## Development checks
+
+Useful local checks before committing changes to this repo:
+
+```bash
+bash -n bin/*.sh shell-init.sh install.sh
+bash bin/ralph-loop-smart.sh  # should print usage and exit 2
+```
+
+For deeper testing, put fake `claude`, `pi`, and `codex` binaries earlier in `PATH` and run `ralph-loop-smart` inside a temporary git repo. This verifies shell orchestration without spending API credits.

@@ -39,6 +39,8 @@ You must never run any of these, and the harness will block you if you try:
 
 You are encouraged to read freely: file reads, directory listings, grep, cat, git status, git log, git diff, running tests, running builds — all fine and expected. Do them often.
 
+When running shell tools, prefer one command per tool call (avoid chaining with `&&` unless there is a true dependency) so tool brokers do not misclassify combined commands as approval-required.
+
 ## Output discipline
 
 End every iteration with this block, verbatim heading, so the next fresh-context iteration can pick up cleanly:

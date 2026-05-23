@@ -47,6 +47,16 @@ fi
 
 [[ -n "$USER_REQUEST" ]] || { echo "ralph-loop-claude: empty request" >&2; exit 2; }
 
+# Default to Sonnet with high thinking/effort for Ralph loop iterations.
+# Users can override these without editing the script, or use the
+# ralph-loop-sonnet / ralph-loop-opus wrappers for model-specific defaults.
+CLAUDE_MODEL="${RALPH_CLAUDE_MODEL:-sonnet}"
+CLAUDE_EFFORT="${RALPH_CLAUDE_EFFORT:-high}"
+
+# Default to non-interactive permissions so loop iterations do not hang on
+# routine build/test commands. Users can override if they want stricter gating.
+CLAUDE_PERMISSION_MODE="${RALPH_CLAUDE_PERMISSION_MODE:-bypassPermissions}"
+
 # Tools to deny — destructive verbs only. Reads, edits, builds, tests stay open.
 # NOTE: --disallowedTools is variadic (`<tools...>`), so we MUST pass a single
 # comma-separated token — otherwise it would eat the trailing prompt positional.
@@ -127,6 +137,9 @@ for i in $(seq 1 "$ITERATIONS"); do
   echo "=== Ralph loop iteration $i / $ITERATIONS (claude) ==="
   echo "    pre-prompt: $PROMPT_FILE"
   echo "    cwd:        $PWD"
+  echo "    model:      $CLAUDE_MODEL"
+  echo "    effort:     $CLAUDE_EFFORT"
+  echo "    permissions:$CLAUDE_PERMISSION_MODE"
   echo "    log:        $LOG_DIR/${RUN_TS}-iter-${i}.log"
   echo
 
@@ -142,7 +155,10 @@ EOF
 )
 
   claude -p \
-    --permission-mode acceptEdits \
+    --model "$CLAUDE_MODEL" \
+    --effort "$CLAUDE_EFFORT" \
+    --permission-mode "$CLAUDE_PERMISSION_MODE" \
+    --verbose \
     --output-format stream-json \
     --system-prompt-file "$PROMPT_FILE" \
     --disallowedTools "$DENY_TOOLS" \
