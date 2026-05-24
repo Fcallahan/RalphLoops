@@ -19,7 +19,7 @@ Each iteration starts with fresh context and re-discovers the current repository
 | `ralph-loop-opus` | Claude Code | Explicit Opus/medium loop. |
 | `ralph-loop-codex` | Codex CLI | OpenAI/Codex single-agent loops. |
 | `ralph-loop-pi` | Pi coding agent | Pi-based loops using your Pi defaults or env overrides. |
-| `ralph-loop-smart` | Claude + Pi + Codex | Multi-model harness: heavy planning, prompt orchestration, low-cost implementation, review, optional fix pass. |
+| `ralph-loop-smart` | Claude + Pi | Multi-model harness: heavy planning/analysis, Pi file scouts, Pi implementation, review, optional fix pass. |
 
 ## Install
 
@@ -77,19 +77,21 @@ ralph-loop-smart plan-implement 4 "implement search, tests, and docs"
 Default pipeline:
 
 ```text
-1. Claude Opus / high      planner      read-only
-2. Pi GPT-5.5 / medium     orchestrator read-only prompt synthesis
-3. Codex GPT-5 / low       worker       sole writer
-4. Claude Opus / medium    reviewer     read-only
-5. Codex GPT-5 / low       fix worker   sole writer, only if review finds fixes
+1. Claude Opus / high      planner           read-only
+2. Pi GPT-5.5 / minimal    scouts/reviewers  read-only file combing
+3. Claude Opus / medium    findings reviewer read-only heavy analysis
+4. Pi GPT-5.5 / medium     worker            sole writer
+5. Claude Opus / medium    diff reviewer     read-only
+6. Pi GPT-5.5 / medium     fix worker        sole writer, only if review finds fixes
 ```
 
 Why this shape:
 
 - **Opus plans** when deep reasoning matters.
-- **Pi orchestrates** the plan into a compact worker contract.
-- **Codex/GPT-5 low writes** to keep implementation cheaper and focused.
-- **Opus reviews** the actual diff before the next iteration.
+- **Pi/GPT-5.5 minimal scouts** comb files and produce concrete findings.
+- **Opus reviews scout findings** into a compact implementation contract.
+- **Pi/GPT-5.5 medium writes** the approved change.
+- **Opus reviews** the actual diff before any fix pass.
 - **Shell owns orchestration**, so each phase passes files instead of relying on hidden chat history.
 
 Run it:
@@ -104,8 +106,12 @@ Artifacts are written under:
 ./.ralph-loop/smart-YYYYmmdd-HHMMSS/iter-N/
 ├── plan.md
 ├── planner.log
+├── scout-1.md
+├── scout-1.log
+├── scout-findings.md
+├── implementation-contract.md
+├── findings-reviewer.log
 ├── worker-prompt.md
-├── orchestrator.log
 ├── worker.log
 ├── worker-summary.md
 ├── review.md
@@ -126,10 +132,11 @@ Add this to each target project’s `.gitignore`:
 | --- | --- | --- |
 | `RALPH_SMART_PLAN_MODEL` | `opus` | Claude planner model. |
 | `RALPH_SMART_PLAN_EFFORT` | `high` | Claude planner effort. |
-| `RALPH_SMART_ORCH_MODEL` | `openai/gpt-5.5` | Pi orchestrator model. |
-| `RALPH_SMART_ORCH_THINKING` | `medium` | Pi orchestrator thinking level. |
-| `RALPH_SMART_WORKER_MODEL` | `gpt-5` | Codex worker model. |
-| `RALPH_SMART_WORKER_EFFORT` | `low` | Codex worker reasoning effort. |
+| `RALPH_SMART_SCOUT_MODEL` | `openai/gpt-5.5` | Pi scout/reviewer model. |
+| `RALPH_SMART_SCOUT_THINKING` | `minimal` | Pi scout/reviewer thinking level. |
+| `RALPH_SMART_SCOUT_COUNT` | `2` | Number of Pi read-only scout passes. |
+| `RALPH_SMART_WORKER_MODEL` | `openai/gpt-5.5` | Pi writer model. |
+| `RALPH_SMART_WORKER_THINKING` | `medium` | Pi writer thinking level. |
 | `RALPH_SMART_REVIEW_MODEL` | `opus` | Claude reviewer model. |
 | `RALPH_SMART_REVIEW_EFFORT` | `medium` | Claude reviewer effort. |
 | `RALPH_SMART_SKIP_REVIEW` | `0` | Set to `1` to skip review and fix phases. |
@@ -143,8 +150,9 @@ RALPH_SMART_REVIEW_MODEL=sonnet \
 RALPH_SMART_SKIP_FIX=1 \
 ralph-loop-smart plan-implement 1 "inspect and improve the CLI help text"
 
-# Use Pi defaults for orchestration
-RALPH_SMART_ORCH_MODEL= \
+# Use Pi defaults for scouts/writer
+RALPH_SMART_SCOUT_MODEL= \
+RALPH_SMART_WORKER_MODEL= \
 ralph-loop-smart plan-implement 2 "build a small feature"
 ```
 
@@ -290,15 +298,15 @@ Use the default Claude permission mode, or explicitly set:
 RALPH_CLAUDE_PERMISSION_MODE=bypassPermissions
 ```
 
-For Smart loops, Claude phases are read-only by tool deny lists, and Codex phases run non-interactively with workspace-write sandboxing.
+For Smart loops, Claude phases are read-only by tool deny lists, Pi scout phases use read-only tool allowlists, and Pi writer phases run with destructive shell commands blocked by shims.
 
 ### A model name is wrong for your setup
 
 Override it with env vars. For example:
 
 ```bash
-RALPH_SMART_ORCH_MODEL=gpt-5.5 \
-RALPH_SMART_WORKER_MODEL=gpt-5-low \
+RALPH_SMART_SCOUT_MODEL=gpt-5.5 \
+RALPH_SMART_WORKER_MODEL=gpt-5.5 \
 ralph-loop-smart plan-implement 1 "..."
 ```
 
@@ -341,4 +349,4 @@ bash -n bin/*.sh shell-init.sh install.sh
 bash bin/ralph-loop-smart.sh  # should print usage and exit 2
 ```
 
-For deeper testing, put fake `claude`, `pi`, and `codex` binaries earlier in `PATH` and run `ralph-loop-smart` inside a temporary git repo. This verifies shell orchestration without spending API credits.
+For deeper testing, put fake `claude` and `pi` binaries earlier in `PATH` and run `ralph-loop-smart` inside a temporary git repo. This verifies shell orchestration without spending API credits.

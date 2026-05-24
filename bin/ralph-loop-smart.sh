@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ralph-loop-smart — multi-model Ralph loop:
-# Opus plans, Pi/GPT-5.5 orchestrates, Codex/GPT-5 low writes, Opus reviews.
+# Opus plans/analyzes, Pi/GPT-5.5 minimal scouts/reviews, Pi/GPT-5.5 medium writes.
 # Usage: ralph-loop-smart <pre-prompt> <iterations> <request...>
 set -uo pipefail
 
@@ -19,10 +19,11 @@ Usage: ralph-loop-smart <pre-prompt> <iterations> <request...>
 Env overrides:
   RALPH_SMART_PLAN_MODEL=opus
   RALPH_SMART_PLAN_EFFORT=high
-  RALPH_SMART_ORCH_MODEL=openai/gpt-5.5
-  RALPH_SMART_ORCH_THINKING=medium
-  RALPH_SMART_WORKER_MODEL=gpt-5
-  RALPH_SMART_WORKER_EFFORT=low
+  RALPH_SMART_SCOUT_MODEL=openai/gpt-5.5
+  RALPH_SMART_SCOUT_THINKING=minimal
+  RALPH_SMART_SCOUT_COUNT=2
+  RALPH_SMART_WORKER_MODEL=openai/gpt-5.5
+  RALPH_SMART_WORKER_THINKING=medium
   RALPH_SMART_REVIEW_MODEL=opus
   RALPH_SMART_REVIEW_EFFORT=medium
   RALPH_SMART_SKIP_REVIEW=0|1
@@ -60,14 +61,20 @@ fi
 
 PLAN_MODEL="${RALPH_SMART_PLAN_MODEL:-opus}"
 PLAN_EFFORT="${RALPH_SMART_PLAN_EFFORT:-high}"
-ORCH_MODEL="${RALPH_SMART_ORCH_MODEL:-openai/gpt-5.5}"
-ORCH_THINKING="${RALPH_SMART_ORCH_THINKING:-medium}"
-WORKER_MODEL="${RALPH_SMART_WORKER_MODEL:-gpt-5}"
-WORKER_EFFORT="${RALPH_SMART_WORKER_EFFORT:-low}"
+SCOUT_MODEL="${RALPH_SMART_SCOUT_MODEL:-openai/gpt-5.5}"
+SCOUT_THINKING="${RALPH_SMART_SCOUT_THINKING:-minimal}"
+SCOUT_COUNT="${RALPH_SMART_SCOUT_COUNT:-2}"
+WORKER_MODEL="${RALPH_SMART_WORKER_MODEL:-openai/gpt-5.5}"
+WORKER_THINKING="${RALPH_SMART_WORKER_THINKING:-medium}"
 REVIEW_MODEL="${RALPH_SMART_REVIEW_MODEL:-opus}"
 REVIEW_EFFORT="${RALPH_SMART_REVIEW_EFFORT:-medium}"
 SKIP_REVIEW="${RALPH_SMART_SKIP_REVIEW:-0}"
 SKIP_FIX="${RALPH_SMART_SKIP_FIX:-0}"
+
+if ! [[ "$SCOUT_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ralph-loop-smart: RALPH_SMART_SCOUT_COUNT must be a positive integer, got: $SCOUT_COUNT" >&2
+  exit 2
+fi
 
 SHIM_DIR="$SCRIPT_DIR/shims"
 if [[ ! -x "$SHIM_DIR/git" || ! -x "$SHIM_DIR/rm" || ! -x "$SHIM_DIR/sudo" ]]; then
@@ -113,6 +120,32 @@ run_readonly_claude() {
   return "$rc"
 }
 
+run_readonly_pi() {
+  local model="$1" thinking="$2" prompt="$3" output="$4" log="$5"
+  local before after rc
+  before="$(worktree_fingerprint)"
+
+  PI_ARGS=(-p --no-session --tools read,bash,grep,find,ls --thinking "$thinking")
+  [[ -n "$model" ]] && PI_ARGS+=(--model "$model")
+  pi "${PI_ARGS[@]}" "$prompt" 2>&1 | tee "$log" > "$output"
+  rc=${PIPESTATUS[0]}
+
+  after="$(worktree_fingerprint)"
+  if [[ "$before" != "$after" ]]; then
+    echo "ralph-loop-smart: WARNING: read-only Pi phase changed the worktree; inspect $log" >&2
+  fi
+
+  return "$rc"
+}
+
+run_writer_pi() {
+  local model="$1" thinking="$2" prompt="$3" output="$4" log="$5"
+  PI_ARGS=(-p --no-session --thinking "$thinking")
+  [[ -n "$model" ]] && PI_ARGS+=(--model "$model")
+  pi "${PI_ARGS[@]}" "$prompt" 2>&1 | tee "$log" > "$output"
+  return "${PIPESTATUS[0]}"
+}
+
 for i in $(seq 1 "$ITERATIONS"); do
   ITER_DIR="$RUN_DIR/iter-$i"
   mkdir -p "$ITER_DIR"
@@ -122,8 +155,8 @@ for i in $(seq 1 "$ITERATIONS"); do
   echo "    pre-prompt: $PROMPT_FILE"
   echo "    cwd:        $PWD"
   echo "    planner:    claude $PLAN_MODEL / $PLAN_EFFORT"
-  echo "    orch:       pi ${ORCH_MODEL:-pi default} / $ORCH_THINKING"
-  echo "    worker:     codex $WORKER_MODEL / $WORKER_EFFORT"
+  echo "    scouts:     pi ${SCOUT_MODEL:-pi default} / $SCOUT_THINKING x$SCOUT_COUNT"
+  echo "    worker:     pi ${WORKER_MODEL:-pi default} / $WORKER_THINKING"
   echo "    reviewer:   claude $REVIEW_MODEL / $REVIEW_EFFORT"
   echo "    artifacts:  $ITER_DIR"
   echo
@@ -168,16 +201,10 @@ EOF
   rc=$?
   [[ $rc -ne 0 ]] && echo "ralph-loop-smart: planner exited $rc — continuing with captured output" >&2
 
-  ORCH_PROMPT=$(cat <<EOF
-You are the orchestrator for a Smart Ralph loop. Convert the Opus plan into a precise prompt for a lower-cost coding worker.
-
-Hard constraints for the worker:
-- The worker is the only writer in this iteration.
-- The worker must audit current state before editing.
-- The worker must implement only the approved highest-value gap.
-- The worker must not commit, push, reset, rebase, checkout, clean, rm -rf, or sudo.
-- The worker must run focused validation where practical.
-- The worker must end with an Iteration summary block.
+  : > "$ITER_DIR/scout-findings.md"
+  for scout_i in $(seq 1 "$SCOUT_COUNT"); do
+    SCOUT_PROMPT=$(cat <<EOF
+You are Pi scout $scout_i of $SCOUT_COUNT for a Smart Ralph loop. You are read-only: inspect files, search, and review current state, but do not edit files.
 
 Original user task:
 $USER_REQUEST
@@ -185,30 +212,75 @@ $USER_REQUEST
 Pre-prompt / continuity contract:
 $PRE_PROMPT_BODY
 
-Planner output:
+Opus planner output:
 $(cat "$ITER_DIR/plan.md")
 
-Return only the final worker prompt. Do not include commentary outside the prompt.
+Focus on concrete file-level findings that help the final writer. Include paths, likely edits, risks, and validation ideas. Do not implement anything.
 EOF
 )
 
-  echo "--- orchestrator (prompt synthesis) ---"
-  PI_ARGS=(-p --no-tools --thinking "$ORCH_THINKING")
-  [[ -n "$ORCH_MODEL" ]] && PI_ARGS+=(--model "$ORCH_MODEL")
-  pi "${PI_ARGS[@]}" "$ORCH_PROMPT" 2>&1 | tee "$ITER_DIR/orchestrator.log" > "$ITER_DIR/worker-prompt.md"
-  rc=${PIPESTATUS[0]}
-  [[ $rc -ne 0 ]] && echo "ralph-loop-smart: orchestrator exited $rc — worker will still receive captured output" >&2
+    echo "--- pi scout $scout_i (read-only) ---"
+    run_readonly_pi "$SCOUT_MODEL" "$SCOUT_THINKING" "$SCOUT_PROMPT" "$ITER_DIR/scout-$scout_i.md" "$ITER_DIR/scout-$scout_i.log"
+    rc=$?
+    [[ $rc -ne 0 ]] && echo "ralph-loop-smart: scout $scout_i exited $rc — continuing with captured output" >&2
+    {
+      echo "# Scout $scout_i"
+      cat "$ITER_DIR/scout-$scout_i.md"
+      echo
+    } >> "$ITER_DIR/scout-findings.md"
+  done
 
-  echo "--- worker (sole writer) ---"
-  codex exec \
-    --model "$WORKER_MODEL" \
-    --sandbox workspace-write \
-    --skip-git-repo-check \
-    -c 'approval_policy="never"' \
-    -c "model_reasoning_effort=\"$WORKER_EFFORT\"" \
-    --output-last-message "$ITER_DIR/worker-summary.md" \
-    "$(cat "$ITER_DIR/worker-prompt.md")" 2>&1 | tee "$ITER_DIR/worker.log"
-  rc=${PIPESTATUS[0]}
+  REVIEW_FINDINGS_PROMPT=$(cat <<EOF
+<role>
+You are Opus, the heavy analysis reviewer. You are read-only. Review the Pi scout findings against the task and planner output, then produce a precise implementation contract for the Pi writer.
+</role>
+
+<task>
+$USER_REQUEST
+</task>
+
+<plan>
+$(cat "$ITER_DIR/plan.md")
+</plan>
+
+<pi-scout-findings>
+$(cat "$ITER_DIR/scout-findings.md")
+</pi-scout-findings>
+
+Return only:
+# Smart Ralph implementation contract — iteration $i
+## Approved highest-value gap
+## File-level instructions
+## Risks / guardrails
+## Validation contract
+EOF
+)
+
+  echo "--- opus review of pi findings (read-only) ---"
+  run_readonly_claude "$REVIEW_MODEL" "$REVIEW_EFFORT" "$REVIEW_FINDINGS_PROMPT" "$ITER_DIR/implementation-contract.md" "$ITER_DIR/findings-reviewer.log"
+  rc=$?
+  [[ $rc -ne 0 ]] && echo "ralph-loop-smart: findings reviewer exited $rc — writer will still receive captured output" >&2
+
+  WORKER_PROMPT=$(cat <<EOF
+You are the sole writer for Smart Ralph loop iteration $i.
+
+Implement only the approved highest-value gap from the implementation contract. Audit current state before editing. Do not commit, push, reset, rebase, checkout, clean, rm -rf, or sudo. Keep scope tight. Run focused validation where practical. End with an Iteration summary block.
+
+Original task:
+$USER_REQUEST
+
+Pre-prompt / continuity contract:
+$PRE_PROMPT_BODY
+
+Implementation contract:
+$(cat "$ITER_DIR/implementation-contract.md")
+EOF
+)
+  printf '%s\n' "$WORKER_PROMPT" > "$ITER_DIR/worker-prompt.md"
+
+  echo "--- pi worker (sole writer) ---"
+  run_writer_pi "$WORKER_MODEL" "$WORKER_THINKING" "$WORKER_PROMPT" "$ITER_DIR/worker-summary.md" "$ITER_DIR/worker.log"
+  rc=$?
   [[ $rc -ne 0 ]] && echo "ralph-loop-smart: worker exited $rc — continuing to review/fix if enabled" >&2
 
   if [[ "$SKIP_REVIEW" == "1" ]]; then
@@ -279,16 +351,9 @@ Rules:
 EOF
 )
 
-  echo "--- fix worker (sole writer) ---"
-  codex exec \
-    --model "$WORKER_MODEL" \
-    --sandbox workspace-write \
-    --skip-git-repo-check \
-    -c 'approval_policy="never"' \
-    -c "model_reasoning_effort=\"$WORKER_EFFORT\"" \
-    --output-last-message "$ITER_DIR/fix-summary.md" \
-    "$FIX_PROMPT" 2>&1 | tee "$ITER_DIR/fix.log"
-  rc=${PIPESTATUS[0]}
+  echo "--- pi fix worker (sole writer) ---"
+  run_writer_pi "$WORKER_MODEL" "$WORKER_THINKING" "$FIX_PROMPT" "$ITER_DIR/fix-summary.md" "$ITER_DIR/fix.log"
+  rc=$?
   [[ $rc -ne 0 ]] && echo "ralph-loop-smart: fix worker exited $rc — continuing to next iteration" >&2
 done
 
