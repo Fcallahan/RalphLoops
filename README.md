@@ -78,19 +78,19 @@ Default pipeline:
 
 ```text
 1. Claude Opus / high      planner           read-only
-2. Pi GPT-5.5 / minimal    scouts/reviewers  read-only file combing
+2. Pi default / minimal    scouts/reviewers  read-only file combing
 3. Claude Opus / medium    findings reviewer read-only heavy analysis
-4. Pi GPT-5.5 / medium     worker            sole writer
+4. Pi default / medium     worker            sole writer
 5. Claude Opus / medium    diff reviewer     read-only
-6. Pi GPT-5.5 / medium     fix worker        sole writer, only if review finds fixes
+6. Pi default / medium     fix worker        sole writer, only if review finds fixes
 ```
 
 Why this shape:
 
 - **Opus plans** when deep reasoning matters.
-- **Pi/GPT-5.5 minimal scouts** comb files and produce concrete findings.
+- **Pi minimal scouts** comb files and produce concrete findings using your Pi default model/provider.
 - **Opus reviews scout findings** into a compact implementation contract.
-- **Pi/GPT-5.5 medium writes** the approved change.
+- **Pi medium writes** the approved change using your Pi default model/provider.
 - **Opus reviews** the actual diff before any fix pass.
 - **Shell owns orchestration**, so each phase passes files instead of relying on hidden chat history.
 
@@ -132,10 +132,10 @@ Add this to each target project’s `.gitignore`:
 | --- | --- | --- |
 | `RALPH_SMART_PLAN_MODEL` | `opus` | Claude planner model. |
 | `RALPH_SMART_PLAN_EFFORT` | `high` | Claude planner effort. |
-| `RALPH_SMART_SCOUT_MODEL` | `openai/gpt-5.5` | Pi scout/reviewer model. |
+| `RALPH_SMART_SCOUT_MODEL` | empty | Pi scout/reviewer model. Empty means use Pi’s configured default model/provider. |
 | `RALPH_SMART_SCOUT_THINKING` | `minimal` | Pi scout/reviewer thinking level. |
 | `RALPH_SMART_SCOUT_COUNT` | `2` | Number of Pi read-only scout passes. |
-| `RALPH_SMART_WORKER_MODEL` | `openai/gpt-5.5` | Pi writer model. |
+| `RALPH_SMART_WORKER_MODEL` | empty | Pi writer model. Empty means use Pi’s configured default model/provider. |
 | `RALPH_SMART_WORKER_THINKING` | `medium` | Pi writer thinking level. |
 | `RALPH_SMART_REVIEW_MODEL` | `opus` | Claude reviewer model. |
 | `RALPH_SMART_REVIEW_EFFORT` | `medium` | Claude reviewer effort. |
@@ -150,9 +150,9 @@ RALPH_SMART_REVIEW_MODEL=sonnet \
 RALPH_SMART_SKIP_FIX=1 \
 ralph-loop-smart plan-implement 1 "inspect and improve the CLI help text"
 
-# Use Pi defaults for scouts/writer
-RALPH_SMART_SCOUT_MODEL= \
-RALPH_SMART_WORKER_MODEL= \
+# Force OpenAI only if you have OPENAI_API_KEY configured
+RALPH_SMART_SCOUT_MODEL=openai/gpt-5.5 \
+RALPH_SMART_WORKER_MODEL=openai/gpt-5.5 \
 ralph-loop-smart plan-implement 2 "build a small feature"
 ```
 
@@ -305,8 +305,8 @@ For Smart loops, Claude phases are read-only by tool deny lists, Pi scout phases
 Override it with env vars. For example:
 
 ```bash
-RALPH_SMART_SCOUT_MODEL=gpt-5.5 \
-RALPH_SMART_WORKER_MODEL=gpt-5.5 \
+RALPH_SMART_SCOUT_MODEL=provider/model \
+RALPH_SMART_WORKER_MODEL=provider/model \
 ralph-loop-smart plan-implement 1 "..."
 ```
 
