@@ -21,6 +21,9 @@ fi
 
 export RALPH_LOOPS_DIR
 
+# Tab completions for ralph-loop-* commands
+fpath+=("$RALPH_LOOPS_DIR/completions")
+
 ralph-loop-claude() {
   "$RALPH_LOOPS_DIR/bin/ralph-loop-claude.sh" "$@"
 }
@@ -41,6 +44,10 @@ ralph-loop-pi() {
   "$RALPH_LOOPS_DIR/bin/ralph-loop-pi.sh" "$@"
 }
 
+ralph-loop-pi-deepseek() {
+  "$RALPH_LOOPS_DIR/bin/ralph-loop-pi-deepseek.sh" "$@"
+}
+
 ralph-loop-smart() {
   "$RALPH_LOOPS_DIR/bin/ralph-loop-smart.sh" "$@"
 }
@@ -50,4 +57,5 @@ alias rls='ralph-loop-sonnet'
 alias rlo='ralph-loop-opus'
 alias rld='ralph-loop-codex'
 alias rlp='ralph-loop-pi'
+alias rlpds='ralph-loop-pi-deepseek'
 alias rlx='ralph-loop-smart'

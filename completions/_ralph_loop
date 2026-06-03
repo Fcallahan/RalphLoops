@@ -1,0 +1,44 @@
+#compdef ralph-loop-pi ralph-loop-pi-deepseek ralph-loop-claude ralph-loop-sonnet ralph-loop-opus ralph-loop-codex ralph-loop-smart rlc rls rlo rld rlp rlpds rlx
+#
+# Zsh completion for Ralph loop commands.
+# Provides tab completions for --thinking levels, prompt names, file paths, etc.
+
+local curcontext="$curcontext" state state_descr line
+local -A opt_args
+
+# Pre-compute prompt names for reuse
+local -a prompts
+prompts=( $(ls "${RALPH_LOOPS_DIR:-$HOME/code/Work/Ralphloops}/prompts/" 2>/dev/null | sed 's/\.md$//') )
+
+_arguments -C \
+  '(- : *)'{-h,--help}'[show help]' \
+  '--thinking[set thinking level]:thinking level:((off\:"no thinking" minimal low medium high xhigh))' \
+  '--file[read task from file]:task file:_files' \
+  '--request-file[read task from file]:task file:_files' \
+  '-f[read task from file]:task file:_files' \
+  ':pre-prompt:->prompts' \
+  ':iterations:->iterations' \
+  ':request:->request' \
+  '*::request rest:->request_rest'
+
+case "$state" in
+  prompts)
+    # Complete prompt names (bare, from prompts/) or file paths
+    _alternative \
+      'prompts:prompt name:compadd -a prompts' \
+      'files:file:_files'
+    ;;
+  iterations)
+    # Just show a hint
+    _message -r "iteration count (positive integer)"
+    ;;
+  request|request_rest)
+    # For ralph-loop-pi which might take --file, show files.
+    # For inline request, show nothing (free text).
+    if [[ $words[(ie)--file] -le $CURRENT || $words[(ie)--request-file] -le $CURRENT || $words[(ie)-f] -le $CURRENT ]]; then
+      _files
+    else
+      _message -r "task description (free text)"
+    fi
+    ;;
+esac

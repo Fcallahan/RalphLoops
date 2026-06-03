@@ -18,7 +18,8 @@ Each iteration starts with fresh context and re-discovers the current repository
 | `ralph-loop-sonnet` | Claude Code | Explicit Sonnet/high loop. |
 | `ralph-loop-opus` | Claude Code | Explicit Opus/medium loop. |
 | `ralph-loop-codex` | Codex CLI | OpenAI/Codex single-agent loops. |
-| `ralph-loop-pi` | Pi coding agent | Pi-based loops using your Pi defaults or env overrides. |
+| `ralph-loop-pi` | Pi coding agent | Pi-based loops using the default Codex model or env overrides. |
+| `ralph-loop-pi-deepseek` | Pi coding agent | Pi-based loops defaulting to DeepSeek/high thinking. |
 | `ralph-loop-smart` | Claude + Pi | Multi-model harness: heavy planning/analysis, Pi file scouts, Pi implementation, review, optional fix pass. |
 
 ## Install
@@ -53,7 +54,9 @@ Or use a single backend:
 ```bash
 ralph-loop-claude plan-implement 3 "build feature X"
 ralph-loop-codex  plan-implement 2 "fix bug Y"
-ralph-loop-pi     plan-implement 1 "audit and document Z"
+ralph-loop-pi          plan-implement 1 "audit and document Z"
+ralph-loop-pi          --thinking high plan-implement 1 --file ./large-task.md
+ralph-loop-pi-deepseek plan-implement 1 "audit and document Z"
 ```
 
 Arguments are the same for every wrapper:
@@ -194,19 +197,23 @@ ralph-loop-codex plan-implement 2 "..."
 
 Codex runs with workspace-write sandboxing and non-interactive approval policy. Destructive shell commands are blocked by PATH shims.
 
-### Pi wrapper
+### Pi wrappers
 
 ```bash
-ralph-loop-pi plan-implement 2 "..."
+ralph-loop-pi          plan-implement 2 "..."
+ralph-loop-pi          --thinking high plan-implement 1 --file ./large-task.md
+ralph-loop-pi-deepseek plan-implement 2 "..."
 ```
 
-By default, Pi uses your configured Pi defaults. Override per run:
+`ralph-loop-pi` defaults to `openai-codex/gpt-5.5` with `medium` thinking. `ralph-loop-pi-deepseek` defaults to `openrouter/deepseek/deepseek-v4-flash` with `high` thinking. Override per run:
 
 ```bash
 RALPH_PI_MODEL=openai/gpt-5.5 \
 RALPH_PI_THINKING=medium \
 ralph-loop-pi plan-implement 1 "..."
 ```
+
+You can also pass `--thinking "no thinking"|off|minimal|low|medium|high|xhigh`; aliases `none`, `no`, and `no-thinking` map to `off`.
 
 ## Safety model
 
@@ -278,6 +285,7 @@ After install:
 | `rlo` | `ralph-loop-opus` |
 | `rld` | `ralph-loop-codex` |
 | `rlp` | `ralph-loop-pi` |
+| `rlpds` | `ralph-loop-pi-deepseek` |
 | `rlx` | `ralph-loop-smart` |
 
 ## Troubleshooting
@@ -331,6 +339,7 @@ RalphLoops/
 │   ├── ralph-loop-opus.sh
 │   ├── ralph-loop-codex.sh
 │   ├── ralph-loop-pi.sh
+│   ├── ralph-loop-pi-deepseek.sh
 │   ├── ralph-loop-smart.sh
 │   └── shims/
 │       ├── git
@@ -346,6 +355,8 @@ Useful local checks before committing changes to this repo:
 
 ```bash
 bash -n bin/*.sh shell-init.sh install.sh
+bash tests/test-ralph-loop-pi.sh
+bash tests/test-ralph-loop-pi-deepseek.sh
 bash bin/ralph-loop-smart.sh  # should print usage and exit 2
 ```
 
