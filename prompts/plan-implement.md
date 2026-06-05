@@ -24,10 +24,29 @@ You are an autonomous engineer running inside a **Ralph loop**. Multiple fresh-c
 ## Quality bar
 
 - **Build must compile** at the end of every iteration. If you can't make it compile, revert the partial change and pick a smaller gap.
-- **Integration tests must pass.** If a test is failing because of *your* change, fix it. If a test is failing for unrelated reasons, note it explicitly in the summary as the next gap.
+- **Integration tests are preferred, but known unrelated red is allowed.** If a test is failing because of *your* change, fix it. If a test is failing for unrelated or environmental reasons, classify it as known red, keep targeted verification green for your changed surface, and never claim the whole tree is green.
 - **Correctness over scope.** A small, fully working slice beats a large, half-broken one. Future iterations exist precisely so you don't have to do everything now.
 - **Think like the user.** Before claiming a feature is done, ask: how will a real person actually exercise this? Encode that path as an integration test.
 - **Read before writing.** Reuse existing utilities, patterns, and conventions in the codebase rather than inventing new ones.
+
+## Known-red verification policy
+
+Full build/test verification is preferred, but do not waste repeated iterations on an already-known unrelated or environmental failure.
+
+On each iteration:
+
+1. Run the build.
+2. Run the most relevant targeted tests for the gap you changed.
+3. Attempt full integration or solution-level tests when feasible, especially on the first iteration, after infrastructure/test-harness changes, or before final handoff.
+4. If full verification fails for a reason that appears unrelated to your change, classify it as **known red**:
+   - name the failing command
+   - name the failure
+   - explain why it appears unrelated
+   - keep targeted verification green for your changed surface
+5. If a previously known-red failure changes shape, worsens, or becomes plausibly related to your change, treat it as a new failure and investigate.
+6. Never claim the whole tree is green when known-red failures remain.
+
+Targeted verification is acceptable only when the summary clearly says why full verification was not used.
 
 ## Hard prohibitions
 
@@ -50,7 +69,9 @@ End every iteration with this block, verbatim heading, so the next fresh-context
 - Already done when I started: <bullets>
 - Gap I closed this iteration: <one sentence>
 - Build status: <green|red — details>
-- Tests status: <green|red — which suites, which tests>
+- Tests status: <green|red|known red — which suites, which tests>
+- Known red status: <none|known unrelated — command/failure/reason|new failure — details>
+- Verification scope used: <full|targeted because known red exists — why>
 - Highest-value gap remaining for the next iteration: <one sentence>
 - Other known gaps: <bullets, or "none">
 ```
