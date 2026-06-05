@@ -15,6 +15,7 @@ chmod +x \
   "$RALPH_LOOPS_DIR/bin/ralph-loop-codex.sh" \
   "$RALPH_LOOPS_DIR/bin/ralph-loop-pi.sh" \
   "$RALPH_LOOPS_DIR/bin/ralph-loop-pi-deepseek.sh" \
+  "$RALPH_LOOPS_DIR/bin/ralph-loop-auto.sh" \
   "$RALPH_LOOPS_DIR/bin/ralph-loop-smart.sh" \
   "$RALPH_LOOPS_DIR/bin/shims/git" \
   "$RALPH_LOOPS_DIR/bin/shims/rm" \
@@ -45,4 +46,5 @@ echo "  ralph-loop-opus   <pre-prompt> <iterations> \"<request>\""
 echo "  ralph-loop-codex  <pre-prompt> <iterations> \"<request>\""
 echo "  ralph-loop-pi          [--thinking medium] <pre-prompt> <iterations> \"<request>\""
 echo "  ralph-loop-pi-deepseek [--thinking high]   <pre-prompt> <iterations> \"<request>\""
+echo "  ralph-loop-auto        [--thinking medium] <pre-prompt> <iterations> \"<request>\""
 echo "  ralph-loop-smart       <pre-prompt> <iterations> \"<request>\""

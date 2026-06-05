@@ -48,6 +48,10 @@ ralph-loop-pi-deepseek() {
   "$RALPH_LOOPS_DIR/bin/ralph-loop-pi-deepseek.sh" "$@"
 }
 
+ralph-loop-auto() {
+  "$RALPH_LOOPS_DIR/bin/ralph-loop-auto.sh" "$@"
+}
+
 ralph-loop-smart() {
   "$RALPH_LOOPS_DIR/bin/ralph-loop-smart.sh" "$@"
 }
@@ -58,4 +62,5 @@ alias rlo='ralph-loop-opus'
 alias rld='ralph-loop-codex'
 alias rlp='ralph-loop-pi'
 alias rlpds='ralph-loop-pi-deepseek'
+alias rla='ralph-loop-auto'
 alias rlx='ralph-loop-smart'

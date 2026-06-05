@@ -1,4 +1,4 @@
-#compdef ralph-loop-pi ralph-loop-pi-deepseek ralph-loop-claude ralph-loop-sonnet ralph-loop-opus ralph-loop-codex ralph-loop-smart rlc rls rlo rld rlp rlpds rlx
+#compdef ralph-loop-pi ralph-loop-pi-deepseek ralph-loop-auto ralph-loop-claude ralph-loop-sonnet ralph-loop-opus ralph-loop-codex ralph-loop-smart rlc rls rlo rld rlp rlpds rla rlx
 #
 # Zsh completion for Ralph loop commands.
 # Provides tab completions for --thinking levels, prompt names, file paths, etc.

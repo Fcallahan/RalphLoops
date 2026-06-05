@@ -20,6 +20,7 @@ Each iteration starts with fresh context and re-discovers the current repository
 | `ralph-loop-codex` | Codex CLI | OpenAI/Codex single-agent loops. |
 | `ralph-loop-pi` | Pi coding agent | Pi-based loops using the default Codex model or env overrides. |
 | `ralph-loop-pi-deepseek` | Pi coding agent | Pi-based loops defaulting to DeepSeek/high thinking. |
+| `ralph-loop-auto` | Pi + Claude CLI | Pi/GPT loop that falls back directly to Claude Opus/medium when Codex 5-hour-limit output is detected. |
 | `ralph-loop-smart` | Claude + Pi | Multi-model harness: heavy planning/analysis, Pi file scouts, Pi implementation, review, optional fix pass. |
 
 ## Install
@@ -57,6 +58,7 @@ ralph-loop-codex  plan-implement 2 "fix bug Y"
 ralph-loop-pi          plan-implement 1 "audit and document Z"
 ralph-loop-pi          --thinking high plan-implement 1 --file ./large-task.md
 ralph-loop-pi-deepseek plan-implement 1 "audit and document Z"
+ralph-loop-auto        plan-implement 3 "use Pi/GPT until Codex limits, then continue with Claude"
 ```
 
 Arguments are the same for every wrapper:
@@ -203,9 +205,10 @@ Codex runs with workspace-write sandboxing and non-interactive approval policy. 
 ralph-loop-pi          plan-implement 2 "..."
 ralph-loop-pi          --thinking high plan-implement 1 --file ./large-task.md
 ralph-loop-pi-deepseek plan-implement 2 "..."
+ralph-loop-auto        plan-implement 2 "..."
 ```
 
-`ralph-loop-pi` defaults to `openai-codex/gpt-5.5` with `medium` thinking. `ralph-loop-pi-deepseek` defaults to `openrouter/deepseek/deepseek-v4-flash` with `high` thinking. Override per run:
+`ralph-loop-pi` defaults to `openai-codex/gpt-5.5` with `medium` thinking. `ralph-loop-pi-deepseek` defaults to `openrouter/deepseek/deepseek-v4-flash` with `high` thinking. `ralph-loop-auto` starts with the Pi/GPT defaults and, if an iteration log contains Codex 5-hour-limit output, reruns that same iteration directly with Claude CLI using Opus/medium, then keeps using Claude for the rest of the run. Override per run:
 
 ```bash
 RALPH_PI_MODEL=openai/gpt-5.5 \
@@ -214,6 +217,16 @@ ralph-loop-pi plan-implement 1 "..."
 ```
 
 You can also pass `--thinking "no thinking"|off|minimal|low|medium|high|xhigh`; aliases `none`, `no`, and `no-thinking` map to `off`.
+
+`ralph-loop-auto` environment overrides:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RALPH_AUTO_PI_MODEL` | `openai-codex/gpt-5.5` | Initial Pi model. |
+| `RALPH_AUTO_PI_THINKING` | `medium` | Initial Pi thinking level. |
+| `RALPH_AUTO_CLAUDE_MODEL` | `opus` | Direct Claude CLI fallback model. |
+| `RALPH_AUTO_CLAUDE_EFFORT` | `medium` | Direct Claude CLI fallback effort. |
+| `RALPH_AUTO_CODEX_LIMIT_REGEX` | built-in 5-hour-limit regex | Extended grep regex used to detect Codex subscription limit output. |
 
 ## Safety model
 
@@ -286,6 +299,7 @@ After install:
 | `rld` | `ralph-loop-codex` |
 | `rlp` | `ralph-loop-pi` |
 | `rlpds` | `ralph-loop-pi-deepseek` |
+| `rla` | `ralph-loop-auto` |
 | `rlx` | `ralph-loop-smart` |
 
 ## Troubleshooting
@@ -340,6 +354,7 @@ RalphLoops/
 │   ├── ralph-loop-codex.sh
 │   ├── ralph-loop-pi.sh
 │   ├── ralph-loop-pi-deepseek.sh
+│   ├── ralph-loop-auto.sh
 │   ├── ralph-loop-smart.sh
 │   └── shims/
 │       ├── git
@@ -357,6 +372,7 @@ Useful local checks before committing changes to this repo:
 bash -n bin/*.sh shell-init.sh install.sh
 bash tests/test-ralph-loop-pi.sh
 bash tests/test-ralph-loop-pi-deepseek.sh
+bash tests/test-ralph-loop-auto.sh
 bash bin/ralph-loop-smart.sh  # should print usage and exit 2
 ```
 
