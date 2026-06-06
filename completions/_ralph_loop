@@ -13,6 +13,8 @@ prompts=( $(ls "${RALPH_LOOPS_DIR:-$HOME/code/Work/Ralphloops}/prompts/" 2>/dev/
 _arguments -C \
   '(- : *)'{-h,--help}'[show help]' \
   '--thinking[set thinking level]:thinking level:((off\:"no thinking" minimal low medium high xhigh))' \
+  '--scout-thinking[set Smart loop scout thinking level]:thinking level:((off\:"no thinking" minimal low medium high xhigh))' \
+  '--scout-model[set Smart loop scout model]:model: ' \
   '--file[read task from file]:task file:_files' \
   '--request-file[read task from file]:task file:_files' \
   '-f[read task from file]:task file:_files' \

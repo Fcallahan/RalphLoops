@@ -83,26 +83,31 @@ Default pipeline:
 
 ```text
 1. Claude Opus / high      planner           read-only
-2. Pi default / minimal    scouts/reviewers  read-only file combing
-3. Claude Opus / medium    findings reviewer read-only heavy analysis
-4. Pi default / medium     worker            sole writer
-5. Claude Opus / medium    diff reviewer     read-only
-6. Pi default / medium     fix worker        sole writer, only if review finds fixes
+2. Pi GPT-5.3 Spark / off scouts            read-only file combing
+3. Pi GPT-5.5 / medium    findings reviewer read-only heavy analysis
+4. Pi GPT-5.5 / medium    worker            sole writer
+5. Pi GPT-5.5 / medium    diff reviewer     read-only
+6. Pi GPT-5.5 / medium    fix worker        sole writer, only if review finds fixes
 ```
 
 Why this shape:
 
 - **Opus plans** when deep reasoning matters.
-- **Pi minimal scouts** comb files and produce concrete findings using your Pi default model/provider.
-- **Opus reviews scout findings** into a compact implementation contract.
-- **Pi medium writes** the approved change using your Pi default model/provider.
-- **Opus reviews** the actual diff before any fix pass.
+- **Pi no-thinking scouts** use GPT-5.3-Codex-Spark by default for fast, cheap file discovery and validation/risk scouting.
+- **Two default scouts are specialized**: scout 1 maps files/edit surfaces; scout 2 focuses on validation, risk, and edge cases.
+- **Pi GPT-5.5 medium reviews scout findings** into a compact implementation contract.
+- **Pi medium writes** the approved change using GPT-5.5 by default.
+- **Pi GPT-5.5 medium reviews** the actual diff before any fix pass.
 - **Shell owns orchestration**, so each phase passes files instead of relying on hidden chat history.
 
 Run it:
 
 ```bash
 ralph-loop-smart plan-implement 2 "refactor the classes page and keep the build green"
+
+# Optional scout overrides
+ralph-loop-smart --scout-model openai-codex/gpt-5.3-codex-spark --scout-thinking off \
+  plan-implement 2 "refactor the classes page and keep the build green"
 ```
 
 Artifacts are written under:
@@ -137,27 +142,32 @@ Add this to each target project’s `.gitignore`:
 | --- | --- | --- |
 | `RALPH_SMART_PLAN_MODEL` | `opus` | Claude planner model. |
 | `RALPH_SMART_PLAN_EFFORT` | `high` | Claude planner effort. |
-| `RALPH_SMART_SCOUT_MODEL` | empty | Pi scout/reviewer model. Empty means use Pi’s configured default model/provider. |
-| `RALPH_SMART_SCOUT_THINKING` | `minimal` | Pi scout/reviewer thinking level. |
+| `RALPH_SMART_SCOUT_MODEL` | `openai-codex/gpt-5.3-codex-spark` | Pi scout model. Can also be set per run with `--scout-model`. |
+| `RALPH_SMART_SCOUT_THINKING` | `off` | Pi scout thinking level. Can also be set per run with `--scout-thinking`. |
 | `RALPH_SMART_SCOUT_COUNT` | `2` | Number of Pi read-only scout passes. |
-| `RALPH_SMART_WORKER_MODEL` | empty | Pi writer model. Empty means use Pi’s configured default model/provider. |
+| `RALPH_SMART_WORKER_MODEL` | `openai-codex/gpt-5.5` | Pi writer model. |
 | `RALPH_SMART_WORKER_THINKING` | `medium` | Pi writer thinking level. |
-| `RALPH_SMART_REVIEW_MODEL` | `opus` | Claude reviewer model. |
-| `RALPH_SMART_REVIEW_EFFORT` | `medium` | Claude reviewer effort. |
+| `RALPH_SMART_REVIEW_MODEL` | `openai-codex/gpt-5.5` | Pi reviewer model. |
+| `RALPH_SMART_REVIEW_THINKING` | `medium` | Pi reviewer thinking level. |
 | `RALPH_SMART_SKIP_REVIEW` | `0` | Set to `1` to skip review and fix phases. |
 | `RALPH_SMART_SKIP_FIX` | `0` | Set to `1` to review only and skip automatic fixes. |
 
 Examples:
 
 ```bash
-# Cheaper review-only run
-RALPH_SMART_REVIEW_MODEL=sonnet \
+# Override review model for one run
+RALPH_SMART_REVIEW_MODEL=openai/gpt-5.5 \
 RALPH_SMART_SKIP_FIX=1 \
 ralph-loop-smart plan-implement 1 "inspect and improve the CLI help text"
+
+# Override scout model/thinking for one run
+ralph-loop-smart --scout-model openai/gpt-5.5 --scout-thinking "no thinking" \
+  plan-implement 2 "build a small feature"
 
 # Force OpenAI only if you have OPENAI_API_KEY configured
 RALPH_SMART_SCOUT_MODEL=openai/gpt-5.5 \
 RALPH_SMART_WORKER_MODEL=openai/gpt-5.5 \
+RALPH_SMART_REVIEW_MODEL=openai/gpt-5.5 \
 ralph-loop-smart plan-implement 2 "build a small feature"
 ```
 
